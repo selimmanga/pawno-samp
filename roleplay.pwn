@@ -4,8 +4,8 @@
 main()
 {
 	print("###############################");
-	print("Roleplay Modu");
-	print("Başlangıç: 29.04.2023");
+	print("Geliştirilebilir Roleplay Modu");
+	print("Hazırlayan: Hardiez");
 	print("###############################");
 	
 }
