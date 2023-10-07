@@ -33,7 +33,7 @@ new Player[MAX_PLAYERS][e_Data];
 public OnFilterScriptInit()
 {
 	mysql_log(ALL);
-	dbHandle = mysql_connect(MYSQL_HOST, MYSQL_USER, MYSQL_PASS, MYSQL_DB);
+	veritabani = mysql_connect(MYSQL_HOST, MYSQL_USER, MYSQL_PASS, MYSQL_DB);
 	if(mysql_errno(veritabani) != 0)
 	{
 		print("[MySQL] Veri tabanı bağlantısı kurulamadı sunucu kapatılıyor...");
@@ -53,7 +53,7 @@ public OnFilterScriptInit()
 														`Oldurme` INT(11) NOT NULL,\
 														`Para` INT(11) NOT NULL,\
 														`Skor` INT(11) NOT NULL,\
-														PRIMARY KEY (`UserID`))");
+														PRIMARY KEY (`ID`))");
 	return 1;
 }
 public OnFilterScriptExit()
