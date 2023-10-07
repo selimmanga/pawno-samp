@@ -3,30 +3,30 @@
 
 #define MYSQL_HOST	"localhost"
 #define MYSQL_USER	"root"
-#define MYSQL_PASS 	"password"
-#define MYSQL_DB	"database"
+#define MYSQL_PASS 	""
+#define MYSQL_DB	"veritabani"
 
 enum
 {
     DIALOG_UNUSED,
-    DIALOG_REGISTER,
-    DIALOG_LOGIN
+    DIALOG_KAYIT,
+    DIALOG_GIRIS
 };
-new MySQL: dbHandle;
+new MySQL: veritabani;
 
 enum e_Data
 {
-	UserID,
-	Password[65],
+	ID,,
+	Sifre[65],
 	Salt[17],
-	Name[MAX_PLAYER_NAME],
-	Kills,
-	Deaths,
-	Money,
-	Score,
-	LoginAttempts,
-	LoginTimer,
-	bool:pLogged
+	Isim[MAX_PLAYER_NAME],
+	Olum,
+	Oldurme,
+	Para,
+	Skor,
+	GirisDenemesi,
+	GirisZamanlayici,
+	bool:OyuncuBaglandi
 }
 new Player[MAX_PLAYERS][e_Data];
 
@@ -34,28 +34,31 @@ public OnFilterScriptInit()
 {
 	mysql_log(ALL);
 	dbHandle = mysql_connect(MYSQL_HOST, MYSQL_USER, MYSQL_PASS, MYSQL_DB);
-	if(mysql_errno(dbHandle) != 0)
+	if(mysql_errno(veritabani) != 0)
 	{
-		print("Could not connect to database!");
-	}else
-	{
-		printf("Successfully connected on DB %s", MYSQL_DB);
+		print("[MySQL] Veri tabanı bağlantısı kurulamadı sunucu kapatılıyor...");
+		SendRconCommand("exit");
 	}
-	mysql_tquery(dbHandle,  "CREATE TABLE IF NOT EXISTS `accounts` (\
-														`UserID` INT(11) NOT NULL AUTO_INCREMENT,\
-														`Username` VARCHAR(24) NOT NULL,\
-														`Password` VARCHAR(129) NOT NULL,\
+	else
+	{
+		printf("[MySQL] Veri tabanı bağlantısı başarılı! Bağlanılan veri tabanı");
+		printf("[MySQL] Bağlanılan veri tabanı: %s", MYSQL_DB);
+	}
+	mysql_tquery(veritabani,  "CREATE TABLE IF NOT EXISTS `oyuncular` (\
+														`ID` INT(11) NOT NULL AUTO_INCREMENT,\
+														`Isim` VARCHAR(24) NOT NULL,\
+														`Sifre` VARCHAR(129) NOT NULL,\
 														`Salt` VARCHAR(16) NOT NULL,\
-														`Kills` INT(11) NOT NULL,\
-														`Deaths` INT(11) NOT NULL,\
-														`Money` INT(11) NOT NULL,\
-														`Score` INT(11) NOT NULL,\
+														`Olum` INT(11) NOT NULL,\
+														`Oldurme` INT(11) NOT NULL,\
+														`Para` INT(11) NOT NULL,\
+														`Skor` INT(11) NOT NULL,\
 														PRIMARY KEY (`UserID`))");
 	return 1;
 }
 public OnFilterScriptExit()
 {
-	mysql_close(dbHandle);
+	mysql_close(veritabani);
 	return 1;
 }
 public OnPlayerConnect(playerid)
@@ -63,26 +66,27 @@ public OnPlayerConnect(playerid)
 	ResetPlayerMoney(playerid);
 	for(new i; e_Data:i < e_Data; i++) Player[playerid][e_Data:i] = 0;
 
-	GetPlayerName(playerid, Player[playerid][Name], MAX_PLAYER_NAME);
+	GetPlayerName(playerid, Player[playerid][Isim], MAX_PLAYER_NAME);
 
 	new query[128];
-	mysql_format(dbHandle, query, sizeof(query),"SELECT * FROM `accounts` WHERE `Username` = '%e' LIMIT 1", Player[playerid][Name]);
-	mysql_tquery(dbHandle, query, "OnAccountCheck", "i", playerid);
+	mysql_format(veritabani, query, sizeof(query),"SELECT * FROM `oyuncular` WHERE `Isim` = '%e' LIMIT 1", Player[playerid][Isim]);
+	mysql_tquery(veritabani, query, "HesapKontrol", "i", playerid);
 	return 1;
 }
 
-forward OnAccountCheck(playerid);
-public OnAccountCheck(playerid)
+forward HesapKontrol(playerid);
+public HesapKontrol(playerid)
 {
 	if(cache_num_rows())
 	{
-		cache_get_value_name(0, "Password", Player[playerid][Password], 129);
+		cache_get_value_name(0, "Sifre", Player[playerid][Sifre], 129);
 		cache_get_value_name(0, "Salt", Player[playerid][Salt], 17);
-		ShowPlayerDialog(playerid, DIALOG_LOGIN, DIALOG_STYLE_INPUT, "Login", "In order to play, you need to login", "Login", "Quit");
-		Player[playerid][LoginTimer] = SetTimerEx("OnLoginTimeout", 30 * 1000, false, "d", playerid);
-	}else
+		ShowPlayerDialog(playerid, DIALOG_GIRIS, DIALOG_STYLE_INPUT, "Giriş", "Oyuna bağlanmak için hesabınıza giriş yapmalısınız.", "Giriş Yap", "Oyundan Çık");
+		Player[playerid][GirisZamanlayici] = SetTimerEx("OnLoginTimeout", 30 * 1000, false, "d", playerid);
+	}
+	else
 	{
-		ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_INPUT, "Register", "In order to play, you need to register.", "Register", "Quit");
+		ShowPlayerDialog(playerid, DIALOG_KAYIT, DIALOG_STYLE_INPUT, "Kayıt", "Hoş geldin! Sunucuda adına kayıtlı bir hesap bulunmuyor, hemen bir tane oluştur!", "Kayıt Ol", "Çıkış Yap");
 	}
 	return 1;
 }
@@ -92,78 +96,79 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 	switch(dialogid)
 	{
 	    case DIALOG_UNUSED: return 1;
-	    case DIALOG_LOGIN:
+	    case DIALOG_GIRIS:
 	    {
 	        if(!response) return Kick(playerid);
 
 			new hashed_pass[65], query[128];
 			SHA256_PassHash(inputtext, Player[playerid][Salt], hashed_pass, 65);
-			if(strcmp(hashed_pass, Player[playerid][Password]) == 0)
+			if(strcmp(hashed_pass, Player[playerid][Giris]) == 0)
 			{
-				mysql_format(dbHandle, query, sizeof(query), "SELECT * FROM `accounts` WHERE `Username` = '%e' LIMIT 1", Player[playerid][Name]);
-				mysql_tquery(dbHandle, query, "OnAccountLoad", "i", playerid);
-				KillTimer(Player[playerid][LoginTimer]);
-				Player[playerid][LoginTimer] = 0;
-			}else
+				mysql_format(veritabani, query, sizeof(query), "SELECT * FROM `oyuncular` WHERE `Isim` = '%e' LIMIT 1", Player[playerid][Isim]);
+				mysql_tquery(veritabani, query, "HesapYukle", "i", playerid);
+				KillTimer(Player[playerid][GirisZamanlayici]);
+				Player[playerid][GirisZamanlayici] = 0;
+			}
+			else
 			{
-				Player[playerid][LoginAttempts]++;
-				if(Player[playerid][LoginAttempts] >= 3)
+				Player[playerid][GirisDenemesi]++;
+				if(Player[playerid][GirisDenemesi] >= 3)
 				{
-					ShowPlayerDialog(playerid, DIALOG_UNUSED, DIALOG_STYLE_MSGBOX, "Login", "You have mistyped your password too often (3 times).", "Okay", "");
+					ShowPlayerDialog(playerid, DIALOG_UNUSED, DIALOG_STYLE_MSGBOX, "Giriş - Hata", "Şifreni 3 defa yanlış girdiğin için sunucudan atıldın.", "Kapat", "");
 					Kick(playerid);
 					return 1;
 				}
-				ShowPlayerDialog(playerid, DIALOG_LOGIN, DIALOG_STYLE_INPUT, "Login", "In order to play, you need to login\nWrong password!", "Login", "Quit");
+				ShowPlayerDialog(playerid, DIALOG_GIRIS, DIALOG_STYLE_INPUT, "Giriş", "Hatalı şifre girdin!\nŞifreni tekrar deneyerek giriş yap.", "Giriş Yap", "Kapat");
 			}
 		}
-		case DIALOG_REGISTER:
+		case DIALOG_KAYIT:
 		{
 		    if(!response) return Kick(playerid);
 
-		    if(strlen(inputtext) < 6) return ShowPlayerDialog(playerid, DIALOG_REGISTER, DIALOG_STYLE_INPUT, "Register", "In order to play, you need to register.\nYour password must be at least 6 characters long!", "Register", "Quit");
+		    if(strlen(inputtext) < 6) return ShowPlayerDialog(playerid, DIALOG_KAYIT, DIALOG_STYLE_INPUT, "Kayıt - Hata", "Şifreniz 6 karakterden kısa olamaz!\nTekrar deneyerek bir şifre oluşturun.", "Kayıt ol", "Kapat");
+			
 			for (new i = 0; i < 16; i++) Player[playerid][Salt][i] = random(94) + 33;
-			SHA256_PassHash(inputtext, Player[playerid][Salt], Player[playerid][Password], 65);
+			SHA256_PassHash(inputtext, Player[playerid][Salt], Player[playerid][Sifre], 65);
 
 			new query[256];
-			mysql_format(dbHandle, query, sizeof(query), "INSERT INTO `accounts` (`Username`, `Password`, `Salt`) VALUES ('%e', '%s', '%e')", Player[playerid][Name], Player[playerid][Password], Player[playerid][Salt]);
-			mysql_tquery(dbHandle, query, "OnAccountRegister", "i", playerid);
+			mysql_format(dbHandle, query, sizeof(query), "INSERT INTO `oyuncular` (`Isim`, `Sifre`, `Salt`) VALUES ('%e', '%s', '%e')", Player[playerid][Isim], Player[playerid][Sifre], Player[playerid][Salt]);
+			mysql_tquery(veritabani, query, "HesapKaydet", "i", playerid);
 		}
 		default: return 0;
 	}
 	return 1;
 }
 
-forward OnAccountLoad(playerid);
-public OnAccountLoad(playerid)
+forward HesapYukle(playerid);
+public HesapYukle(playerid)
 {
-    cache_get_value_name_int(0, "UserID", Player[playerid][UserID]);
-	cache_get_value_name_int(0, "Kills", Player[playerid][Kills]);
-	cache_get_value_name_int(0, "Deaths", Player[playerid][Deaths]);
-	cache_get_value_name_int(0, "Money", Player[playerid][Money]);
-	cache_get_value_name_int(0, "Score", Player[playerid][Score]);
+    cache_get_value_name_int(0, "ID", Player[playerid][ID]);
+	cache_get_value_name_int(0, "Oldurme", Player[playerid][Oldurme]);
+	cache_get_value_name_int(0, "Olum", Player[playerid][Olum]);
+	cache_get_value_name_int(0, "Para", Player[playerid][Para]);
+	cache_get_value_name_int(0, "Skor", Player[playerid][Skor]);
 
- 	SetPlayerScore(playerid, Player[playerid][Score]);
- 	GivePlayerMoney(playerid, Player[playerid][Money]);
-	Player[playerid][pLogged] = true;
-	SendClientMessage(playerid, -1, "Successfully logged in");
+ 	SetPlayerScore(playerid, Player[playerid][Skor]);
+ 	GivePlayerMoney(playerid, Player[playerid][Para]);
+	Player[playerid][OyuncuGirdi] = true;
+	SendClientMessage(playerid, -1, "SUNUCU: Sunucumuza hoş geldin! Yeni kayıt olan oyuncularımıza verilen hediyeleri topla ve eğlenceye katıl.");
+	GivePlayerMoney(playerid, 50000);
 	return 1;
 }
 
-forward OnAccountRegister(playerid);
-public OnAccountRegister(playerid)
+forward HesapKaydet(playerid);
+public HesapKaydet(playerid)
 {
-    Player[playerid][UserID] = cache_insert_id();
-    GivePlayerMoney(playerid, 50000);
-    Player[playerid][pLogged] = true;
-    printf("New account registered. ID: %d", Player[playerid][UserID]);
+    Player[playerid][ID] = cache_insert_id();
+    Player[playerid][OyuncuGirdi] = true;
     return 1;
 }
-forward OnLoginTimeout(playerid);
-public OnLoginTimeout(playerid)
+forward ZamanAsimi(playerid);
+public ZamanAsimi(playerid)
 {
-	Player[playerid][LoginTimer] = 0;
+	Player[playerid][GirisZamanlayici] = 0;
 
-	ShowPlayerDialog(playerid, DIALOG_UNUSED, DIALOG_STYLE_MSGBOX, "Login", "You have been kicked for taking too long to login successfully to your account.", "Okay", "");
+	ShowPlayerDialog(playerid, DIALOG_UNUSED, DIALOG_STYLE_MSGBOX, "Giriş - Kick", "Çok uzun süre giriş yapmadığınız ya da kayıt olmadığınız için sunucudan atıldınız.", "Kapat", "");
 	Kick(playerid);
 	return 1;
 }
@@ -182,9 +187,9 @@ public OnPlayerDeath(playerid, killerid, reason)
 {
 	if(killerid != INVALID_PLAYER_ID)
 	{
-		Player[killerid][Kills]++;
+		Player[killerid][Oldurme]++;
 	}
-	Player[playerid][Deaths]++;
+	Player[playerid][Olum]++;
 	return 1;
 }
 
@@ -193,8 +198,8 @@ stock UpdatePlayerData(playerid)
     if(Player[playerid][pLogged] == true)
 	{
 		new query[256];
-		mysql_format(dbHandle, query, sizeof(query), "UPDATE `accounts` SET `Kills` = %d, `Deaths` = %d, `Money` = %d, `Score` = %d WHERE `ID` = %d", Player[playerid][Kills], Player[playerid][Deaths], GetPlayerMoney(playerid), GetPlayerScore(playerid), Player[playerid][UserID]);
-		mysql_tquery(dbHandle, query);
+		mysql_format(veritabani, query, sizeof(query), "UPDATE `oyuncular` SET `Oldurme` = %d, `Olum` = %d, `Para` = %d, `Skor` = %d WHERE `ID` = %d", Player[playerid][Oldurme], Player[playerid][Olum], GetPlayerMoney(playerid), GetPlayerScore(playerid), Player[playerid][ID]);
+		mysql_tquery(veritabani, query);
 	}
 	return 1;
 }
